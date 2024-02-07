@@ -17,7 +17,7 @@ public class User {
     private String username;
     @Column("age")
     private int age;
-    @Column("registration_data")
+    @Column("registration_date")
     private LocalDate registration;
 
     public User(String username, int age, LocalDate registration) {

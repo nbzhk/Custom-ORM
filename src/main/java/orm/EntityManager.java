@@ -5,8 +5,11 @@ import anotations.Entity;
 import anotations.Id;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,7 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class EntityManager<E> implements DbContext<E> {
-    private Connection connection;
+    private final Connection connection;
 
     public EntityManager(Connection connection) {
         this.connection = connection;
@@ -67,6 +70,84 @@ public class EntityManager<E> implements DbContext<E> {
         return connection.prepareStatement(updateQuery).execute();
     }
 
+    @Override
+    public boolean delete(E toDelete) {
+        return false;
+    }
+
+    @Override
+    public Iterable<E> find(Class<E> table) throws SQLException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+       return find(table, null);
+    }
+
+    @Override
+    public Iterable<E> find(Class<E> table, String where) throws SQLException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Statement statement = connection.createStatement();
+        String tableName = getTableName(table);
+
+        String query = String.format(
+                "SELECT * FROM %s %s", tableName, where != null ? "WHERE " + where : "");
+
+        ResultSet resultSet = statement.executeQuery(query);
+
+        List<E> result = new ArrayList<>();
+        while (resultSet.next()) {
+            E entity = table.getDeclaredConstructor().newInstance();
+            fillEntity(table, resultSet, entity);
+            result.add(entity);
+        }
+
+        return result;
+    }
+
+    @Override
+    public E findFirst(Class<E> table) throws SQLException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        return findFirst(table, null);
+    }
+
+    @Override
+    public E findFirst(Class<E> table, String where) throws SQLException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        Statement statement = connection.createStatement();
+        String tableName = getTableName(table);
+
+        String query = String.format(
+                "SELECT * FROM %s %s LIMIT 1", tableName, where != null ? "WHERE " + where : "");
+
+        ResultSet resultSet = statement.executeQuery(query);
+        E entity = table.getDeclaredConstructor().newInstance();
+
+
+        resultSet.next();
+        fillEntity(table, resultSet, entity);
+
+        return entity;
+    }
+
+    private void fillEntity(Class<E> table, ResultSet resultSet, E entity) throws SQLException, IllegalAccessException {
+        Field[] declaredFields = Arrays.stream(table.getDeclaredFields()).toArray(Field[]::new);
+
+        for (Field field : declaredFields) {
+            field.setAccessible(true);
+            fillField(field, resultSet, entity);
+        }
+    }
+
+    private void fillField(Field field, ResultSet resultSet, E entity) throws SQLException, IllegalAccessException {
+        field.setAccessible(true);
+
+        String fieldName = field.getAnnotationsByType(Column.class)[0].value();
+
+        if (field.getType() == int.class || field.getType() == Integer.class) {
+            field.set(entity, resultSet.getInt(fieldName));
+        } else if (field.getType() == long.class || field.getType() == Long.class) {
+            field.set(entity, resultSet.getLong(fieldName));
+        } else if (field.getType() == LocalDate.class) {
+            field.set(entity, LocalDate.parse(resultSet.getString(fieldName)));
+        } else {
+            field.set(entity, resultSet.getString(fieldName));
+        }
+    }
+
     private List<String> getColumnsWithoutId(Class<?> aClass) {
         return Arrays.stream(aClass.getDeclaredFields())
                 .filter(f -> !f.isAnnotationPresent(Id.class))
@@ -81,7 +162,7 @@ public class EntityManager<E> implements DbContext<E> {
         List<Field> fields = Arrays.stream(aClass.getDeclaredFields())
                 .filter(f -> !f.isAnnotationPresent(Id.class))
                 .filter(f -> f.isAnnotationPresent(Column.class))
-                .collect(Collectors.toList());
+                .toList();
 
         List<String> values = new ArrayList<>();
         for (Field field : fields) {
@@ -116,26 +197,4 @@ public class EntityManager<E> implements DbContext<E> {
                         new UnsupportedOperationException("Entity missing Id"));
 
     }
-
-    @Override
-    public Iterable<E> find(Class<E> table) {
-        return null;
-    }
-
-    @Override
-    public Iterable<E> find(Class<E> table, String where) {
-        return null;
-    }
-
-    @Override
-    public E findFirst(Class<E> table) {
-        return null;
-    }
-
-    @Override
-    public E findFirst(Class<E> table, String where) {
-        return null;
-    }
-
-
 }

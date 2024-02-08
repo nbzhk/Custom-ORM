@@ -20,6 +20,10 @@ public class User {
     @Column("registration_date")
     private LocalDate registration;
 
+    public User() {
+
+    }
+
     public User(String username, int age, LocalDate registration) {
         this.username = username;
         this.age = age;
@@ -63,5 +67,15 @@ public class User {
                 .filter(x -> x.isAnnotationPresent(Id.class))
                 .findFirst()
                 .orElseThrow(() -> new UnsupportedOperationException("Entity does not have primary key"));
+    }
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", username='" + username + '\'' +
+                ", age=" + age +
+                ", registration=" + registration +
+                '}';
     }
 }

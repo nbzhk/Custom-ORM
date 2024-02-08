@@ -15,9 +15,11 @@ import java.util.stream.Collectors;
 
 public class EntityManager<E> implements DbContext<E> {
     private Connection connection;
+
     public EntityManager(Connection connection) {
         this.connection = connection;
     }
+
     @Override
     public boolean persist(E entity) throws IllegalAccessException, SQLException {
         Field idColumn = getIdColumn(entity.getClass());
@@ -28,42 +30,53 @@ public class EntityManager<E> implements DbContext<E> {
             return doInsert(entity);
         }
 
-        return doUpdate(entity, idColumn);
-    }
-
-    private boolean doUpdate(E entity, Field idColumn) throws IllegalAccessException, SQLException {
-        String tableName = getTableName(entity.getClass());
-        String tableFields = getColumnsWithoutId(entity.getClass());
-        String newValues = getColumnValuesWithoutId(entity);
-
-        String updateQuery = String.format(
-                "UPDATE %s SET %s = %s WHERE `id` = %d", tableName, tableFields, newValues, idColumn.getInt(idColumn)
-        );
-
-        return connection.prepareStatement(updateQuery).execute();
+        return doUpdate(entity,(long) idValue);
     }
 
     private boolean doInsert(E entity) throws IllegalAccessException, SQLException {
         String tableName = getTableName(entity.getClass());
-        String tableFields = getColumnsWithoutId(entity.getClass());
-        String tableValues = getColumnValuesWithoutId(entity);
+        List<String> tableFields = getColumnsWithoutId(entity.getClass());
+        List<String> tableValues = getColumnValuesWithoutId(entity);
 
         String insertQuery = String.format(
-                "INSERT INTO %s (%s) VALUES(%s)", tableName, tableFields, tableValues);
+                "INSERT INTO %s (%s) VALUES(%s)", tableName,
+                String.join(", ", tableFields),
+                String.join(", ", tableValues));
 
         return connection.prepareStatement(insertQuery).execute();
     }
 
-    private String getColumnsWithoutId(Class<?> aClass) {
+    private boolean doUpdate(E entity, long idValue) throws IllegalAccessException, SQLException {
+        String tableName = getTableName(entity.getClass());
+        List<String> tableFields = getColumnsWithoutId(entity.getClass());
+        List<String> tableValues = getColumnValuesWithoutId(entity);
+
+        List<String> setStatements = new ArrayList<>();
+        for (int i = 0; i < tableFields.size(); i++) {
+            String statement = tableFields.get(i) + " = " + tableValues.get(i);
+
+            setStatements.add(statement);
+        }
+
+        String updateQuery = String.format(
+                "UPDATE %s SET %s WHERE `id` = %d", tableName,
+                String.join(", ", setStatements), idValue);
+
+        System.out.println();
+
+        return connection.prepareStatement(updateQuery).execute();
+    }
+
+    private List<String> getColumnsWithoutId(Class<?> aClass) {
         return Arrays.stream(aClass.getDeclaredFields())
                 .filter(f -> !f.isAnnotationPresent(Id.class))
                 .filter(f -> f.isAnnotationPresent(Column.class))
                 .map(f -> f.getAnnotationsByType(Column.class))
                 .map(a -> a[0].value())
-                .collect(Collectors.joining(","));
+                .collect(Collectors.toList());
     }
 
-    private String getColumnValuesWithoutId(E entity) throws IllegalAccessException {
+    private List<String> getColumnValuesWithoutId(E entity) throws IllegalAccessException {
         Class<?> aClass = entity.getClass();
         List<Field> fields = Arrays.stream(aClass.getDeclaredFields())
                 .filter(f -> !f.isAnnotationPresent(Id.class))
@@ -82,7 +95,7 @@ public class EntityManager<E> implements DbContext<E> {
             }
         }
 
-        return String.join(",", values);
+        return values;
     }
 
     private String getTableName(Class<?> aClass) {
@@ -100,7 +113,7 @@ public class EntityManager<E> implements DbContext<E> {
                 .filter(f -> f.isAnnotationPresent(Id.class))
                 .findFirst()
                 .orElseThrow(() ->
-                       new UnsupportedOperationException("Entity missing Id"));
+                        new UnsupportedOperationException("Entity missing Id"));
 
     }
 

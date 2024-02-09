@@ -6,10 +6,7 @@ import anotations.Id;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -121,6 +118,44 @@ public class EntityManager<E> implements DbContext<E> {
         fillEntity(table, resultSet, entity);
 
         return entity;
+    }
+
+    public void doCreate(Class<E> entityClass) throws SQLException {
+        String tableName = getTableName(entityClass);
+        String query = String.format(
+                "CREATE TABLE %s (id INT PRIMARY KEY AUTO_INCREMENT, %s)",
+                tableName, getAllFieldsAndDataTypes(entityClass)
+        );
+
+        PreparedStatement statement = connection.prepareStatement(query);
+
+        statement.execute();
+    }
+
+    private String getAllFieldsAndDataTypes(Class<E> entityClass) {
+        Field[] fields = Arrays.stream(entityClass.getDeclaredFields())
+                .filter(f -> !f.isAnnotationPresent(Id.class))
+                .filter(f -> f.isAnnotationPresent(Column.class))
+                .toArray(Field[]::new);
+
+        List<String> result = new ArrayList<>();
+        for (Field field : fields) {
+            String fieldName = field.getAnnotationsByType(Column.class)[0].value();
+            Class<?> fieldType = field.getType();
+
+            String type = "";
+            if (fieldType == Integer.class || fieldType == int.class) {
+                type = "INT";
+            } else if (fieldType == String.class) {
+                type = "VARCHAR(255)";
+            } else if (fieldType == LocalDate.class) {
+                type = "DATE";
+            }
+
+            result.add(fieldName + " " + type);
+        }
+
+        return String.join(", ", result);
     }
 
     private void fillEntity(Class<E> table, ResultSet resultSet, E entity) throws SQLException, IllegalAccessException {

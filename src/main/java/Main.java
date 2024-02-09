@@ -5,6 +5,7 @@ import orm.MyConnector;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.LocalDate;
 
 import static orm.MyConnector.getConnection;
 
@@ -15,6 +16,10 @@ public class Main {
         Connection connection = getConnection();
 
         EntityManager<User> userEntityManager = new EntityManager<>(connection);
+        User userToAdd = new User("Pesho", 23, LocalDate.now());
+
+        userEntityManager.doCreate(User.class);
+        userEntityManager.persist(userToAdd);
 
         Iterable<User> user = userEntityManager.find(User.class, "id > 1");
 
